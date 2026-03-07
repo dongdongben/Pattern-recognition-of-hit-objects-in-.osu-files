@@ -1,0 +1,13 @@
+﻿# Byte-compiled / cache
+__pycache__/
+*.pyc
+
+# Virtual env
+.venv/
+
+# Training outputs
+artifacts/
+
+# Data outputs
+data/processed/*.csv
+data/processed/*.json
