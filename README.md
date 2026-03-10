@@ -1,53 +1,65 @@
-﻿# Pattern Recognition in Videogames (.osu) - Learning Skeleton
+﻿# Pattern Recognition in Videogames (.osu) - Chunking Pipeline
 
-This branch is intentionally scaffold-only so you can implement each part yourself.
+This branch now focuses on **pattern chunking** instead of pattern naming.
+
+## Objective
+
+Given `.osu` beatmaps, generate per-object training rows that describe:
+- chunk boundary membership (combo-based)
+- chunk numbering within a pattern (`1,2,3,...`)
+- geometric/timing context for model learning
+
+Chunk labels are derived from combo structure:
+- `is_new_combo`: boundary flag from hit object type bits
+- `chunk_id`: running chunk index in a map
+- `chunk_pos`: position inside chunk (on-screen number)
+
+## Current Pipeline
+
+1. Parse `[TimingPoints]` and `[HitObjects]` from `.osu`.
+2. Derive combo/chunk labels from `new_combo` boundaries.
+3. Extract per-object features (timing, spacing, direction).
+4. Add a **6-note history context window** (`i-5 ... i`) with relative placement/timing.
+5. Write one consolidated CSV.
 
 ## Setup
 
 ```powershell
 cd "C:\Users\ben20\Desktop\Pain\Projects\Pattern_Recognition_in_Videogames"
-.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-## Files to implement
+If PowerShell blocks `Activate.ps1`, run scripts directly with venv python:
 
-- `src/prv/osu_parser.py`
-- `src/prv/features.py`
-- `src/prv/heuristics.py`
-- `src/prv/dataset.py`
-- `src/prv/model.py`
-- `scripts/preprocess_osu.py`
-- `scripts/train_transformer.py`
+```powershell
+.\.venv\Scripts\python.exe scripts\preprocess_osu.py --input data\raw --output-dir data\processed
+```
 
-## Functions to implement
-`parse_osu_file`: reads one .osu file and extracts structured timing + hit object sequences.
+## Run Preprocessing
 
-`get_active_beat_length_ms`: gives beat length at each object timestamp so timing is beat-normalized (dt_beats), which is crucial for rhythm-aware features.
+```powershell
+python scripts\preprocess_osu.py --input data\raw --output-dir data\processed
+```
 
-`extract_object_features`: converts raw objects into model-ready per-object numeric features (timing gaps, spatial deltas, distance, angle, object type flags).
+## Output
 
-`label_level1`: assigns coarse pseudo-label (jumps/streams/sliders/filler) from feature rules.
+- `data/processed/all_objects.csv`
 
-`label_level2`: assigns subtype pseudo-label (jump_aim, flow_aim, etc.) conditioned on features and Level-1.
+## Important CSV Columns
 
-`apply_heuristic_labels`: runs labeling across a full object sequence and appends both label levels.
+Core:
+- `map_path`, `object_index`, `time_ms`, `x`, `y`
+- `dt_ms`, `dt_beats`, `dx`, `dy`, `distance`, `norm_distance`, `turn_angle_deg`
+- `is_slider`, `is_spinner`, `is_new_combo`
+- `chunk_id`, `chunk_pos`
 
-`SequenceChunkDataset.init`: loads CSV, groups by map, chunks into fixed-length sequences for Transformer training.
+6-note context window (slot `0..5`, where `5` is current note):
+- `ctx_valid_k`
+- `ctx_rel_x_k`
+- `ctx_rel_y_k`
+- `ctx_rel_dt_beats_k`
 
-`SequenceChunkDataset.getitem`: returns one training sample (x, labels, mask).
+## Notes
 
-`PositionalEncoding.init`: builds positional signal so the model knows order in sequence.
-
-`PositionalEncoding.forward`: adds that positional information to token embeddings.
-
-`OsuPatternTransformer.init`: defines encoder + two classifier heads (Level-1, Level-2).
-
-`OsuPatternTransformer.forward`: runs sequence through encoder and outputs per-token logits for both label levels.
-
-`main in preprocess_osu.py`: orchestration step for building processed train/val/test CSVs from raw .osu.
-
-`main in train_transformer.py`: orchestration step for training loop, validation, and checkpoint saving.
-
-
-Each file has function signatures and TODO placeholders.
+- This branch currently prioritizes preprocessing and labeling for chunk-learning.
+- `train_transformer.py` / model training can be aligned to chunk targets next.

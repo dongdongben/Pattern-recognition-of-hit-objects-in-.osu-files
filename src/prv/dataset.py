@@ -5,7 +5,7 @@ from typing import Dict, List
 import torch
 from torch.utils.data import Dataset
 
-FEATURE_COLUMNS = [
+BASE_FEATURE_COLUMNS = [
     "dt_ms",
     "dt_beats",
     "dx",
@@ -15,7 +15,21 @@ FEATURE_COLUMNS = [
     "turn_angle_deg",
     "is_slider",
     "is_spinner",
+    "is_new_combo",
 ]
+
+CONTEXT_FEATURE_COLUMNS: List[str] = []
+for slot in range(6):
+    CONTEXT_FEATURE_COLUMNS.extend(
+        [
+            f"ctx_valid_{slot}",
+            f"ctx_rel_x_{slot}",
+            f"ctx_rel_y_{slot}",
+            f"ctx_rel_dt_beats_{slot}",
+        ]
+    )
+
+FEATURE_COLUMNS = BASE_FEATURE_COLUMNS + CONTEXT_FEATURE_COLUMNS
 
 
 class SequenceChunkDataset(Dataset):
