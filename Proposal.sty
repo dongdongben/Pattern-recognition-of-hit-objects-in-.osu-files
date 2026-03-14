@@ -1,23 +1,21 @@
-\documentclass[final]{article}
-
+﻿\documentclass[final]{article}
 
 \usepackage{APS360}
-\usepackage[utf8]{inputenc} % allow utf-8 input
-\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
-\usepackage{hyperref}       % hyperlinks
-\usepackage{url}            % simple URL typesetting
-\usepackage{booktabs}       % professional-quality tables
-\usepackage{amsfonts}       % blackboard math symbols
-\usepackage{nicefrac}       % compact symbols for 1/  2, etc.
-\usepackage{microtype}      % microtypography
-\usepackage{xcolor}         % colors
- \usepackage{url} % for URLs in bibliography (optional but useful)
- \usepackage{tikz}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning, shapes.geometric}
 \usepackage{graphicx}
 \usepackage{amsmath}
 
-\title{APS360 Project Proposal: \\ Pattern recognition of hit objects in .osu files using Transformer Network}
+\title{APS360 Project Proposal: \\ Chunking Hit-Object Sequences in \texttt{.osu} Files Using Sequence Models}
 
 \author{%
   Ben Lian \\
@@ -32,58 +30,53 @@
 \vspace{-0.5in}
 
 \section*{Introduction}
-Modern video games are increasingly viewed as more than entertainment: they are structured, data-rich systems where learning algorithms can be trained, evaluated, and deployed at scale. As DeepMind notes, ``Games have been used for decades as an important way to test and evaluate the performance of artificial intelligence systems.'' \cite{deepmind_alphastar} This project focuses on the rhythm game \textit{osu!} \cite{osu_mode_wiki} and aims to build a deep learning ``map reader'' that segments a beatmap \cite{osu_beatmap_wiki} into labeled patterns. Further application of a successful model can be applied to support beatmap difficulty calculation, which helps maintain the healthiness of the game. Deep learning is a reasonable approach because these patterns are sequential and context-dependent: the same local spacing can represent different gameplay intent depending on surrounding rhythm, angle changes, and slider velocity, making heuristics brittle across different beatmaps.
+Modern video games are increasingly viewed as more than entertainment: they are structured, data-rich systems where learning algorithms can be trained, evaluated, and deployed at scale. As DeepMind notes, ``Games have been used for decades as an important way to test and evaluate the performance of artificial intelligence systems.'' \cite{deepmind_alphastar} This project focuses on the rhythm game \textit{osu!} \cite{osu_mode_wiki}, but shifts the goal from naming pattern types to modeling \emph{reading chunking}: the way consecutive hit objects are mentally grouped during play.
 
-
+In \textit{osu!}, players do not read every note independently. Instead, they often perceive a short sequence of objects as a unit, such as a line, triangle, square-like shape, or other local arrangement. This project aims to build a deep learning ``map reader'' that predicts chunk structure from \texttt{.osu} hit-object sequences. More concretely, each object will be assigned a chunk identity and a within-chunk position (for example, the objects in one chunk may be numbered $1$-$2$-$3$-$4$, followed by a new chunk numbered $1$-$2$-$3$). This framing is meaningful because chunking is tied to geometry, timing, and local sequence context, which makes it a natural fit for sequence models.
 
 \section*{Illustration}
 \begin{figure}[htbp]
   \centering
   \fbox{\includegraphics[width=0.8\linewidth]{illustration.png}}
-    \caption{End-to-end pipeline for the proposed \texttt{.osu} map reader. Beatmaps are parsed into feature sequences, heuristics generate Level-1 pseudo-labels, and manual review refines and add Level-2 subtypes. A Transformer sequence model is trained using the corrected labels as ground truth (via supervised loss), and is then used to infer object pattern labels on other beatmaps.}
+  \caption{Proposed chunking pipeline for \texttt{.osu} beatmaps. Beatmaps are parsed into feature sequences, chunk labels are derived from map structure, and a sequence model is trained to predict chunk boundaries and in-chunk numbering from geometric and temporal context.}
   \label{fig:illustration}
 \end{figure}
 
-
 \section*{Background \& Related Work}
-Recent works motivate learning-based approaches for understanding and evaluating structure in games and, more specifically, rhythm-game charts. TaikoNation targets \emph{patterning-focused} chart generation, showing that neural models can learn and reproduce recurring chart motifs \cite{halina2021taikonation}. Mania Archetype also studies the generation of rhythm-game charts, reinforcing the idea that chart structure can be modeled in a way that reflects player experience \cite{wang2024mania_archetype}. Osu2MIR demonstrates that the information from osu-derived beatmaps can be repurposed into a research dataset \cite{liu2025osu2mir}. More broadly, the PCGML literature surveys deep learning methods for procedural game content, positioning rhythm-game charts as a viable domain for learned structure in game design artifacts \cite{liu2021dl_pcg}. In terms of ML used to evaluate game-related data, esports analytics has applied machine learning to infer results from game signals \cite{garcia2025esports_win_pred}. These works collectively motivate the goal of learning an interpretable pattern labeling of \texttt{.osu} hit-object sequences (Level-1 and Level-2) rather than only producing coarse difficulty summaries.
+Recent works motivate learning-based approaches for understanding and evaluating structure in games and, more specifically, rhythm-game charts. TaikoNation targets \emph{patterning-focused} chart generation, showing that neural models can learn and reproduce recurring chart motifs \cite{halina2021taikonation}. Mania Archetype also studies the generation of rhythm-game charts, reinforcing the idea that chart structure can be modeled in a way that reflects player experience \cite{wang2024mania_archetype}. Osu2MIR demonstrates that the information from osu-derived beatmaps can be repurposed into a research dataset \cite{liu2025osu2mir}. More broadly, the PCGML literature surveys deep learning methods for procedural game content, positioning rhythm-game charts as a viable domain for learned structure in game design artifacts \cite{liu2021dl_pcg}.
 
-
-
+These works mainly focus on generation, timing, or broad chart structure. By contrast, this project focuses on \emph{reading organization}: learning how hit objects should be grouped into small readable units. This makes the task closer to sequence perception than to difficulty estimation alone. If successful, such a model could support beatmap analysis, reading assistance tools, and future studies on how expert players process local geometric patterns.
 
 \section*{Data Processing}
-Beatmaps that contain the \texttt{.osu} files can be obtained from osu!'s official beatmap listing \cite{osu_beatmap_listing}. 
-\texttt{.osu} files will be parsed according to the structure of \texttt{.osu} files \cite{osu_file_format}. A preprocess program will parse the two relevant sections for this project: \texttt{[TimingPoints]} and \texttt{[HitObjects]}. To parse, subsequent lines are read until the next header line beginning with [ or end-of-file; by iterating through the file line-by-line (e.g., \texttt{for line in f:}) and using the read and write function \cite{so_read_write_open} will be effective. Parsed data will be stored as feature.file (.csv or .txt)
+Beatmaps that contain the \texttt{.osu} files can be obtained from osu!'s official beatmap listing \cite{osu_beatmap_listing}. \texttt{.osu} files will be parsed according to the structure of \texttt{.osu} files \cite{osu_file_format}. A preprocess program will parse the two relevant sections for this project: \texttt{[TimingPoints]} and \texttt{[HitObjects]}. To parse, subsequent lines are read until the next header line beginning with [ or end-of-file by iterating through the file line-by-line.
 
-After creating feature.file, the objects will receive a pseudo label from a heuristic program by computing the beat-normalized spatiotemporal relationships between objects (e.g., $\Delta b$, $\Delta x$, $\Delta y$, normalized spacing $d/R$, and turn-angle features).   These quantities, together with a Level-1 label, will be appended to each object entry. They will then be manually corrected and labeled for Level-2 subtypes. The resulting corrected dataset is split into training/validation/test subsets.
+For each hit object, the preprocessing pipeline will compute a feature row containing spatial and timing information such as $(x, y)$ position, $\Delta x$, $\Delta y$, elapsed time, beat-normalized elapsed time, spacing, and local context features. In addition, each row will include a short context window that describes the relative placement and timing of recent objects. This is intended to help the model capture multi-note geometry rather than only pairwise transitions.
 
-The official definition of patterns are incomplete on the osu! wiki \cite{osu_pattern_wiki}. But this Youtube video \cite{osu_pattern_youtube} provides the very basic definitions. This project will have the following categories: 
+The target labels are no longer pattern names such as jump or stream. Instead, the dataset will represent chunk structure:
+\begin{itemize}
+\item \texttt{chunk\_start}: whether an object begins a new chunk
+\item \texttt{chunk\_pos}: the object's index within its current chunk ($1, 2, 3, \dots$)
+\item \texttt{chunk\_id}: a running chunk identifier within a map
+\end{itemize}
 
-Level-1: Jumps, Streams, Sliders, Filler \\
-Level-2: Jump Aim, Awkward Aim, Flow Aim, Accelerating Flow Aim, Slider Aim, Linear Aim
-
+For the current project scope, the provided \texttt{.osu} files are assumed to already contain chunk-consistent numbering through map structure, allowing chunk labels to be derived programmatically during preprocessing. The resulting dataset is then split into training, validation, and test subsets.
 
 \section*{Architecture}
-\textbf{Transformer encoder} will be used as the main model. Intuitively, a Transformer processes a sequence by using \emph{self-attention}, which allows the prediction at one hit object to depend on other nearby or distant hit objects in the same clip. This is useful because osu! patterns are defined by relationships across multiple notes. The Transformer outputs a representation for each hit object, and then a small classification layer converts these representations into pattern labels.
+\textbf{Transformer encoder} will be used as the main model. Intuitively, a Transformer processes a sequence by using \emph{self-attention}, which allows the prediction at one hit object to depend on several nearby or moderately distant hit objects in the same clip. This is useful because chunking is not determined by a single note alone; rather, it depends on the arrangement of multiple recent notes in time and space.
 
-There are two levels of output implementation: (1) a simple Level-1 classifier, and (2) an Level-2 classifier that brings the label down to subtypes within each Level-1 category. Exact details such as the number of layers, hidden dimension, and attention heads will be chosen experimentally during implementation.
-
-
-
+Each hit object is represented by a numeric feature vector rather than a discrete word token. These feature vectors are projected into a learned hidden space, enriched with positional information, and then processed by Transformer layers. The model will output per-object predictions, such as whether the object starts a chunk and what its within-chunk position is. A simpler recurrent baseline such as a BiLSTM may also be implemented for comparison.
 
 \section*{Baseline Model}
-Currently, \texttt{osu!} has a heuristic difficulty evaluation system that assess the notes' spacing and speed, and provides it with a numerical rating, while this project does not have a scope large enough to train a model that provide something at that level of complexity, this existing heuristic can be used as a baseline when the neural network receives further development. This project is merely a baseline for something bigger.
+A reasonable baseline for this project is a heuristic chunking system derived directly from map structure, such as combo resets or other simple parsing rules. Because the project goal is to learn chunk structure from sequential geometry and timing, this heuristic provides a natural point of comparison: it is cheap to compute and may already capture some chunk boundaries, but it cannot adapt flexibly to more complex geometric reading behavior. The learned model will be evaluated on whether it can recover chunk labels more accurately or more robustly than this rule-based baseline.
 
+\section*{Evaluation}
+The main evaluation target is token-level chunk prediction. Useful metrics include chunk-start accuracy or F1, within-chunk position accuracy, and exact chunk reconstruction quality on held-out maps. Splits should be performed at the map level rather than the row level so that the model is tested on unseen beatmaps instead of unseen notes from the same map.
 
 \section*{Ethical Considerations}
-Beatmaps may include copyrighted assets (audio/backgrounds), so the pipeline will use only \texttt{.osu} text and derived numeric features, and will not share media files. Since beatmaps are community-created, the project will follow osu!'s content usage permissions \cite{osu_content_usage}. Finally, pattern labels are subjective (e.g., whether the aim is awkward or not), so the annotations may reflect personal bias and the model may inherit it, so labeling criteria and failure cases will be documented; labeling rules and outputs will be presented as descriptive rather than authoritative.
-
-
-
-
+Beatmaps may include copyrighted assets (audio/backgrounds), so the pipeline will use only \texttt{.osu} text and derived numeric features, and will not share media files. Since beatmaps are community-created, the project will follow osu!'s content usage permissions \cite{osu_content_usage}. Finally, chunk structure can still contain subjectivity, especially if future work introduces human expert annotations beyond map-derived labels. For that reason, labeling assumptions, limitations, and failure cases will be documented, and outputs will be presented as descriptive rather than authoritative.
 
 \newpage
 \bibliographystyle{IEEEtran}
-\bibliography{references} % references.bib
+\bibliography{references}
 
 \end{document}
