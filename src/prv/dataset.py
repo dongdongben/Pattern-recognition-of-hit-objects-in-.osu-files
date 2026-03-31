@@ -18,6 +18,7 @@ FEATURE_COLUMNS = [
     "norm_distance",
     "is_slider",
     "is_spinner",
+    "combo_is_new_combo",
 ]
 
 
@@ -65,7 +66,8 @@ class SequenceChunkDataset(Dataset):
 
         for i, row in enumerate(rows):
             x[i] = torch.tensor([float(row[col]) for col in FEATURE_COLUMNS], dtype=torch.float32)
-            y[i] = int(float(row["chunk_pos"])) - 1
+            chunk_pos = int(float(row["chunk_pos"]))
+            y[i] = 1 if chunk_pos == 1 else 0
             mask[i] = True
 
         return {"x": x, "y": y, "mask": mask}

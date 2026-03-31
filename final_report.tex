@@ -1,0 +1,184 @@
+\documentclass[final]{article}
+
+\usepackage{APS360}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
+
+\title{APS360 Final Report:\\Chunking Hit-Object Sequences in \texttt{.osu} Files Using Sequence Models}
+
+\author{%
+  Ben Lian \\
+  1010943525, ben.lian@mail.utoronto.ca\\
+  \url{https://github.com/dongdongben/Pattern-recognition-of-hit-objects-in-.osu-files}
+}
+
+\begin{document}
+
+\maketitle
+
+\vspace{-0.5in}
+
+\section*{Introduction}
+This project studies \emph{chunking} in the rhythm game \textit{osu!}. During play, notes are not usually read one at a time; instead, players often group nearby hit objects into short local units such as ``1-2-3'' or ``1-2-3-4'' patterns. The goal of the project is to predict this structure directly from beatmap data. More specifically, given a sequence of hit objects from a \texttt{.osu} file, the system predicts whether each object starts a new chunk and, by reconstruction, what its within-chunk position should be.
+
+The project is interesting for two reasons. First, it is a concrete sequence-perception problem in a real game domain, rather than a toy time-series task. Second, it sits between game AI and human reading behavior: a good model should capture not just timing, but the geometric grouping that makes patterns readable. Machine learning is a reasonable approach because chunking depends on multiple interacting cues such as spacing, timing, direction, and local context. These relationships are difficult to encode by hand, but they are well suited to learned sequence models.
+
+\section*{Illustration}
+\begin{figure}[!h]
+\centering
+\small
+\begin{tikzpicture}[
+    node distance=1.0cm and 0.8cm,
+    box/.style={
+        draw,
+        rounded corners,
+        minimum width=3.0cm,
+        minimum height=1.0cm,
+        align=center,
+        fill=blue!5
+    },
+    modelbox/.style={
+        draw,
+        rounded corners,
+        minimum width=3.2cm,
+        minimum height=1.0cm,
+        align=center,
+        fill=green!5
+    },
+    evalbox/.style={
+        draw,
+        rounded corners,
+        minimum width=3.2cm,
+        minimum height=1.0cm,
+        align=center,
+        fill=orange!5
+    },
+    arrow/.style={-{Latex[length=2.5mm]}, thick}
+]
+
+\node[box] (raw) {Chunk-labeled\\\texttt{.osu} maps};
+\node[box, right=of raw] (parser) {Parse timing\\and hit objects};
+\node[box, right=of parser] (features) {Extract features\\$x,y,dt,dx,dy$};
+
+\node[box, below=of parser] (labels) {Chunk labels\\from map edits};
+\node[box, left=of labels] (orig) {Original maps\\recover combo starts};
+\node[box, right=of labels] (dataset) {Processed dataset\\one row / object};
+
+\node[box, below=of labels] (split) {Map-level split\\train / val / test};
+\node[modelbox, left=of split] (baseline) {Baseline\\logistic boundary model};
+\node[modelbox, right=of split] (transformer) {Primary model\\Transformer for chunk start};
+\node[evalbox, below=of split] (eval) {Evaluation\\boundary and chunk metrics};
+
+\draw[arrow] (raw) -- (parser);
+\draw[arrow] (parser) -- (features);
+\draw[arrow] (parser) -- (labels);
+\draw[arrow] (orig) -- (labels);
+\draw[arrow] (features) -- (dataset);
+\draw[arrow] (labels) -- (dataset);
+\draw[arrow] (dataset) -- (split);
+\draw[arrow] (split) -- (baseline);
+\draw[arrow] (split) -- (transformer);
+\draw[arrow] (baseline) -- (eval);
+\draw[arrow] (transformer) -- (eval);
+\end{tikzpicture}
+\caption{Overall system pipeline. Chunk-labeled beatmaps provide the training labels, while the original beatmaps provide combo-start metadata as a separate signal. The final learning problem is chunk-start prediction on map-level train/validation/test splits.}
+\label{fig:system}
+\end{figure}
+
+\section*{Background \& Related Work}
+Several prior works motivate this project. \textbf{TaikoNation} studies pattern-aware generation for another rhythm game and shows that recurrent chart structure can be learned rather than hand-coded. \textbf{Mania Archetype} similarly focuses on rhythm-game chart structure and supports the idea that player-facing chart patterns can be modeled statistically. \textbf{Osu2MIR} demonstrates that \textit{osu!}-derived data can be repurposed as a machine learning dataset rather than only a game artifact. Outside rhythm games specifically, survey work on \textbf{deep learning for procedural content generation} places chart understanding in a broader family of learned game-content models. Finally, \textbf{Attention Is All You Need} provides the Transformer architecture used here, and is relevant because chunking depends on relationships across multiple nearby notes rather than a single local rule.
+
+These works are adjacent to, but not identical to, the present project. Most prior rhythm-game papers emphasize chart generation, timing, or music-representation tasks. My project instead focuses on a reading-oriented problem: how hit objects should be grouped into locally readable units. In that sense, it is closer to sequence perception than to chart generation alone.
+
+\section*{Data Processing}
+The data source is a collection of \texttt{.osu} beatmaps. I used two aligned versions of the maps: a chunk-labeled version in \texttt{data/raw}, where combo resets were manually edited to reflect my intended reading chunks, and an original version in \texttt{data/original}, which preserves the mapper's original combo structure. The current dataset contains \textbf{15 maps} and \textbf{17{,}527} hit-object rows in total. The preprocessing script writes a map-level split with \textbf{12{,}388} training rows, \textbf{2{,}333} validation rows, and \textbf{2{,}806} test rows.
+
+The parser reads the \texttt{[TimingPoints]} and \texttt{[HitObjects]} sections of each file. For every hit object, I compute numeric features including absolute position \((x,y)\), elapsed time in milliseconds and beats (\texttt{dt\_ms}, \texttt{dt\_beats}), displacement from the previous object (\texttt{dx}, \texttt{dy}), Euclidean distance, normalized distance, and object-type indicators for sliders and spinners. The original maps are then matched to the chunk-labeled maps by normalized filename and aligned object-by-object using timestamp and near-identical coordinates. This produces additional metadata such as \texttt{combo\_id}, \texttt{combo\_pos}, and \texttt{combo\_is\_new\_combo}.
+
+The current model input is intentionally small. The final feature vector contains 11 values:
+\[
+[x, y, dt_{ms}, dt_{beats}, dx, dy, distance, norm\_distance, is\_slider, is\_spinner, combo\_is\_new\_combo].
+\]
+An example processed row is one where a note at \((224,104)\) is followed 127 ms later by a note at \((413,320)\), producing a large displacement and a normalized distance of about 3.13 circle radii. This kind of row-level representation is easy to reproduce and makes the dataset directly usable for both baseline and neural models.
+
+\section*{Architecture}
+My final neural architecture is a Transformer encoder that predicts \texttt{chunk\_start} rather than directly predicting \texttt{chunk\_pos}. This change was important. Early experiments treated \texttt{chunk\_pos} as a plain multiclass classification problem, but that formulation allowed impossible outputs such as non-monotonic sequences. In reality, chunk positions must increase until a new chunk start resets the count to 1. Predicting chunk starts is therefore a better-aligned learning target.
+
+Each note feature vector is first projected through a linear layer into a hidden dimension of 128. I then add sinusoidal positional encoding so the model knows the order of notes in the sequence. The encoder itself contains \textbf{2 Transformer blocks}, each with \textbf{4 attention heads} and a feedforward width of \textbf{256}. The sequence length is \textbf{32}, the batch size is \textbf{8}, and the optimizer is AdamW with learning rate \textbf{$3\times10^{-4}$}. Dropout was removed from the current model because I found it unnecessarily distorted the local pattern-reading objective on this relatively small dataset.
+
+At training time, the dataset is sliced into fixed-length note sequences and padded where necessary. The model outputs a binary prediction per note: 1 if the note is predicted to start a chunk, and 0 otherwise. A separate post-processing step can reconstruct chunk positions by resetting to 1 at each predicted chunk start and incrementing thereafter.
+
+\section*{Baseline Model}
+The baseline is a logistic chunk-boundary classifier implemented as a single linear layer with sigmoid output, which is equivalent to logistic regression. It uses a small feature set similar to the neural model, but it predicts chunk starts directly from a linear decision boundary over the features instead of learning deeper sequence interactions. After chunk-start prediction, chunk positions are reconstructed by incrementing between predicted starts.
+
+This is a reasonable baseline because it is simple, fast to train, and easy to interpret. If a more complex Transformer cannot beat this baseline, then either the task is already close to linearly separable under the chosen features or the neural model is not yet making good use of its extra capacity. In other words, the baseline gives a clear lower bound and a sanity check for the rest of the project.
+
+\section*{Quantitative Results}
+Table \ref{tab:results} summarizes the current quantitative results. The baseline was evaluated on held-out test maps. The Transformer result corresponds to the best validation accuracy observed after reformulating the task as binary chunk-start prediction.
+
+\begin{table}[!h]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+Model & Split & Accuracy & Precision & Recall \\
+\midrule
+Logistic baseline & Test & 85.00\% & 81.14\% & 75.10\% \\
+Transformer & Val. & $\approx$80\% & -- & -- \\
+\bottomrule
+\end{tabular}
+\caption{Current boundary-detection results. The baseline numbers are exact metrics from the held-out test split; the Transformer value is the best validation chunk-start accuracy observed during model development.}
+\label{tab:results}
+\end{table}
+
+For the baseline, the held-out test F1 score is \textbf{0.7800}. When chunk positions are reconstructed from the predicted boundaries, the baseline achieves \textbf{67.07\% exact match} on \texttt{chunk\_pos} with a \textbf{1.0164} mean absolute error. Earlier neural experiments that directly predicted \texttt{chunk\_pos} stagnated well below this level, typically around the mid-40\% range on validation accuracy. Changing the target to \texttt{chunk\_start} improved the optimization problem substantially and pushed the best Transformer validation accuracy to roughly 80\%.
+
+\section*{Qualitative Results}
+Qualitatively, the models behave in ways that match their design. The logistic baseline tends to perform well when chunk starts align with clear local events such as large jumps, abrupt spacing changes, or original combo resets. However, because it is only linear, it can still miss starts in visually ambiguous sections where the decision depends on several notes together rather than one pairwise transition.
+
+The Transformer behaves more plausibly on these multi-note cases. Once the target was changed to \texttt{chunk\_start}, the output sequence became easier to interpret: the model predicts a binary start/not-start pattern which can be reconstructed into valid chunk positions. In successful examples, predicted chunk starts align with visible pattern changes such as resets after a local jump or shape transition. In failure cases, the model usually inserts a chunk start too early in dense passages or misses a start when the geometry changes subtly without a strong timing cue. These failure modes are consistent with the idea that chunking depends on local shape context that is only partially captured by the current feature set.
+
+\section*{Evaluate Model on New Data}
+To evaluate generalization on new data, all splits were performed at the \emph{map level} rather than the note level. This is critical for the project, since notes from the same map are highly correlated and a random row-level split would overestimate performance. In the current processed dataset, the final split contains 10 training maps, 2 validation maps, and 3 test maps.
+
+The baseline was evaluated on held-out test maps and achieved strong test performance, which shows that the basic chunk-start signal generalizes reasonably well when the representation is simple. For the neural model, held-out validation maps were used for model selection and tuning. This means the baseline currently has the stronger fully held-out quantitative evaluation, while the Transformer's most reliable current figure is still its best validation accuracy. This is a limitation of the current experimental stage, but the map-level split itself is correct and gives a meaningful picture of generalization to unseen beatmaps.
+
+\section*{Discussion}
+The most important result of the project is not just the 80\% boundary accuracy, but the sequence of modeling decisions that led there. Directly predicting \texttt{chunk\_pos} seemed reasonable at first, but it ignored the structure of the target. Since chunk positions must increase until a reset, treating them as unconstrained classes made the learning problem unnecessarily hard and led to poor results. Reformulating the task as \texttt{chunk\_start} prediction was therefore a major improvement.
+
+At the same time, the current results show that model complexity alone is not enough. The logistic baseline is surprisingly strong and currently outperforms the Transformer on the most reliable held-out split. This suggests that either the chosen features already capture much of the useful signal, or that the current Transformer is still not using its extra sequential capacity effectively. I view this as an informative result rather than a failure: it clarifies that the project is challenging not because the code is broken, but because chunking is a structured perception task with weak supervision and a limited dataset.
+
+Another interesting lesson is the role of combo information. Feeding the full original combo position into the model did not help much, likely because values such as 4, 7, or 12 are noisy and inconsistent across maps. A binary indicator for whether a note starts an original combo is a cleaner cue, and is more aligned with the chunk-start objective. Even then, the signal is helpful but not sufficient; the model still needs to learn geometry and timing relationships.
+
+\section*{Project Difficulty / Quality}
+I believe this project is reasonably challenging for the course scope. The task is not a standard image classifier or a textbook sequence problem. First, the target itself is somewhat subjective: chunking is intended to reflect reading behavior, not just a mechanical property of the chart. Second, the supervision is weak, since the labels are derived from edited combo structure rather than from a large set of independent expert annotations. Third, the output has real structure: chunk positions must increase monotonically and reset at the right moments. Finally, the dataset is small compared with many deep learning projects, which makes generalization difficult and puts real pressure on representation and evaluation design.
+
+Given those challenges, the project has still produced a full end-to-end pipeline, a strong baseline, a neural model that learns a meaningful chunk-start signal, and a clear understanding of what does and does not help. Even though the Transformer has not yet surpassed the linear baseline on the most reliable held-out result, the project demonstrates learning beyond a direct copy of the labs and reaches a meaningful performance level on a nontrivial domain problem.
+
+\section*{Ethical Considerations}
+There are two main ethical concerns in this project. The first is data usage. \textit{osu!} beatmaps may be associated with copyrighted music and visual assets, so the project uses only the text-based \texttt{.osu} files and derived numerical features, not the audio or image files themselves. The second concern is label subjectivity. The chunk labels in this project reflect one reading interpretation encoded through edited combo structure, which means they may not represent how all players read a map. A model trained on these labels should therefore be treated as a descriptive or assistive system, not as an authoritative ground truth for how a chart \emph{must} be read.
+
+\newpage
+\section*{References}
+\begin{enumerate}
+    \item Ash Vaswani et al. ``Attention Is All You Need.'' \emph{Advances in Neural Information Processing Systems}, 2017.
+    \item Halina et al. ``TaikoNation: Patterning-Focused Chart Generation for Rhythm Games.'' 2021.
+    \item Wang et al. ``Mania Archetype.'' 2024.
+    \item Liu et al. ``Osu2MIR.'' 2025.
+    \item Liu et al. ``Deep Learning for Procedural Content Generation.'' 2021.
+    \item \textit{osu!} Wiki. ``File Format.'' \url{https://osu.ppy.sh/wiki/en/Client/File_formats/osu_(file_format)}.
+    \item \textit{osu!} Wiki. ``osu! beatmaps and game mode documentation.'' \url{https://osu.ppy.sh/wiki}.
+\end{enumerate}
+
+\end{document}

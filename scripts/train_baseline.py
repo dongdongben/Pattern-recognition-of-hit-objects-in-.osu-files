@@ -31,6 +31,8 @@ EXCLUDED_COLUMNS = {
     "is_new_combo",
     "chunk_id",
     "chunk_pos",
+    "combo_id",
+    "combo_pos",
 }
 
 
@@ -359,3 +361,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

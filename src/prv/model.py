@@ -52,7 +52,7 @@ class OsuPatternTransformer(nn.Module):
         nhead: int = 4,
         num_layers: int = 4,
         dim_feedforward: int = 512,
-        num_classes: int = 8,
+        num_classes: int = 2,
     ):
         super().__init__()
         self.emb = nn.Linear(input_dim, d_model)
