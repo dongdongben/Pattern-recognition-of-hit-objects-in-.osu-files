@@ -12,13 +12,8 @@ FEATURE_COLUMNS = [
     "y",
     "dt_ms",
     "dt_beats",
-    "dx",
-    "dy",
-    "distance",
-    "norm_distance",
     "is_slider",
     "is_spinner",
-    "combo_is_new_combo",
 ]
 
 

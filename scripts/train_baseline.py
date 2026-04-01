@@ -26,13 +26,16 @@ EXCLUDED_COLUMNS = {
     "map_path",
     "object_index",
     "time_ms",
-    "x",
-    "y",
+    "dx",
+    "dy",
+    "distance",
+    "norm_distance",
     "is_new_combo",
     "chunk_id",
     "chunk_pos",
     "combo_id",
     "combo_pos",
+    "combo_is_new_combo",
 }
 
 

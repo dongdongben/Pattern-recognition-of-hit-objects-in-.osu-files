@@ -1,19 +1,16 @@
 {
   "csv": "data\\processed\\all_objects.csv",
-  "feature_count": 9,
+  "feature_count": 6,
   "features": [
+    "x",
+    "y",
     "dt_ms",
     "dt_beats",
-    "dx",
-    "dy",
-    "distance",
-    "norm_distance",
     "is_slider",
-    "is_spinner",
-    "combo_is_new_combo"
+    "is_spinner"
   ],
   "seed": 360,
-  "best_epoch": 47,
+  "best_epoch": 11,
   "splits": {
     "train_rows": 9862,
     "val_rows": 3344,
@@ -23,39 +20,39 @@
     "test_maps": 3
   },
   "train_metrics": {
-    "accuracy": 0.871020077063476,
-    "precision": 0.7683215130023641,
-    "recall": 0.7951765117091926,
-    "f1": 0.7815183785640674,
-    "tp": 2275.0,
-    "tn": 6315.0,
-    "fp": 686.0,
-    "fn": 586.0,
-    "chunk_pos_exact_match": 0.7628270127763132,
-    "chunk_pos_mae": 0.6998580409653214
+    "accuracy": 0.6782599878320827,
+    "precision": 0.46888711607499,
+    "recall": 0.8217406501223349,
+    "f1": 0.5970793650793651,
+    "tp": 2351.0,
+    "tn": 4338.0,
+    "fp": 2663.0,
+    "fn": 510.0,
+    "chunk_pos_exact_match": 0.46511863719326707,
+    "chunk_pos_mae": 5.008517542080714
   },
   "val_metrics": {
-    "accuracy": 0.9120813397129187,
-    "precision": 0.8051948051948052,
-    "recall": 0.9117647058823529,
-    "f1": 0.8551724137931035,
-    "tp": 868.0,
-    "tn": 2182.0,
-    "fp": 210.0,
-    "fn": 84.0,
-    "chunk_pos_exact_match": 0.8615430622009569,
-    "chunk_pos_mae": 0.2736244019138756
+    "accuracy": 0.7365430622009569,
+    "precision": 0.5239057239057239,
+    "recall": 0.8172268907563025,
+    "f1": 0.6384899466557242,
+    "tp": 778.0,
+    "tn": 1685.0,
+    "fp": 707.0,
+    "fn": 174.0,
+    "chunk_pos_exact_match": 0.5272129186602871,
+    "chunk_pos_mae": 3.3283492822966507
   },
   "test_metrics": {
-    "accuracy": 0.8500347141865309,
-    "precision": 0.8114406779661016,
-    "recall": 0.7509803921568627,
-    "f1": 0.7800407331975561,
-    "tp": 1149.0,
-    "tn": 2524.0,
-    "fp": 267.0,
-    "fn": 381.0,
-    "chunk_pos_exact_match": 0.6706780837769035,
-    "chunk_pos_mae": 1.016431381624624
+    "accuracy": 0.6155982411478824,
+    "precision": 0.4768959435626102,
+    "recall": 0.8836601307189542,
+    "f1": 0.6194730813287515,
+    "tp": 1352.0,
+    "tn": 1308.0,
+    "fp": 1483.0,
+    "fn": 178.0,
+    "chunk_pos_exact_match": 0.4325387641749595,
+    "chunk_pos_mae": 7.906734552186994
   }
 }
